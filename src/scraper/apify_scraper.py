@@ -1,13 +1,10 @@
-"""Apify-backed LinkedIn + Indeed scrapers.
+"""Apify-backed LinkedIn scraper.
 
-Each scraper makes ONE broad fetch per process (not per title × location), capped
-at apify_per_source_limit jobs (default 100). The title × location loop in
-main.scrape_all then filters the cached results locally — same pattern as
-AdzunaScraper — so we never burn extra Apify credits.
+Makes ONE broad fetch per process (not per title × location), capped at
+apify_per_source_limit jobs (default 100). The title × location loop in
+main.scrape_all filters the cached results locally — no extra Apify credits.
 
-Actor defaults (override via env):
-  LinkedIn — curious_coder~linkedin-jobs-scraper
-  Indeed   — misceres~indeed-scraper
+Actor default (override via env): curious_coder~linkedin-jobs-scraper
 """
 from __future__ import annotations
 
@@ -186,34 +183,3 @@ class ApifyLinkedInScraper(_BaseApifyScraper):
         )
 
 
-class ApifyIndeedScraper(_BaseApifyScraper):
-    source = "apify_indeed"
-    actor_id_attr = "apify_indeed_actor"
-
-    def build_input(self) -> dict:
-        return {
-            "position": self.user_config.job_title,
-            "country": "IN",
-            "location": "India",
-            "maxItemsPerSearch": platform.apify_per_source_limit,
-            "parseCompanyDetails": False,
-            "saveOnlyUniqueItems": True,
-        }
-
-    def _to_job(self, raw: dict) -> Job | None:
-        job_id = str(
-            raw.get("id") or raw.get("jobkey") or raw.get("jobKey") or raw.get("url") or ""
-        ).strip()
-        if not job_id:
-            return None
-        return Job(
-            id=job_id,
-            title=raw.get("positionName", "") or raw.get("title", ""),
-            company=raw.get("company", "") or raw.get("companyName", ""),
-            location=raw.get("location", ""),
-            salary=raw.get("salary"),
-            apply_url=raw.get("url", "") or raw.get("externalApplyLink", ""),
-            source=self.source,
-            posted_date=self._parse_date(raw),
-            description=(raw.get("description") or raw.get("descriptionText") or "")[:2000],
-        )

@@ -30,7 +30,6 @@ class PlatformConfig:
     adzuna_app_key: str = _get("ADZUNA_APP_KEY")
     apify_api_token: str = _get("APIFY_API_TOKEN")
     apify_linkedin_actor: str = _get("APIFY_LINKEDIN_ACTOR", "curious_coder~linkedin-jobs-scraper")
-    apify_indeed_actor: str = _get("APIFY_INDEED_ACTOR", "misceres~indeed-scraper")
     apify_per_source_limit: int = _get_int("APIFY_PER_SOURCE_LIMIT", 100)
 
     hunter_api_key: str = _get("HUNTER_API_KEY")

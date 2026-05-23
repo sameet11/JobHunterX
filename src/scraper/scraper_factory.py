@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from config.user_config import UserConfig
 from src.scraper.adzuna_scraper import AdzunaScraper
-from src.scraper.apify_scraper import ApifyIndeedScraper, ApifyLinkedInScraper
+from src.scraper.apify_scraper import ApifyLinkedInScraper
 from src.scraper.ashby_scraper import AshbyScraper
 from src.scraper.base_scraper import BaseScraper
 from src.scraper.greenhouse_scraper import GreenhouseScraper
@@ -27,7 +27,6 @@ _REGISTRY: dict[str, type[BaseScraper]] = {
     "hn": HNScraper,
     "adzuna": AdzunaScraper,
     "apify_linkedin": ApifyLinkedInScraper,
-    "apify_indeed": ApifyIndeedScraper,
 }
 
 
