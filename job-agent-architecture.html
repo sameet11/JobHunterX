@@ -1,0 +1,1246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JobHunterX — Architecture</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&family=Syne:wght@400;600;700;800&display=swap');
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --surface2: #16161f;
+    --border: #1e1e2e;
+    --accent: #00ff88;
+    --accent2: #0088ff;
+    --accent3: #ff6b35;
+    --accent4: #c77dff;
+    --text: #e0e0f0;
+    --muted: #555570;
+    --danger: #ff4466;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grid noise background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,255,136,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,255,136,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 40px 24px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Header */
+  header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 60px;
+    flex-wrap: wrap;
+    gap: 20px;
+  }
+
+  .title-block h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(28px, 4vw, 48px);
+    font-weight: 800;
+    letter-spacing: -1px;
+    line-height: 1;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .title-block p {
+    color: var(--muted);
+    font-size: 12px;
+    margin-top: 8px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  .badges {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .badge {
+    padding: 6px 14px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .badge-green { background: rgba(0,255,136,0.1); color: var(--accent); border: 1px solid rgba(0,255,136,0.3); }
+  .badge-blue  { background: rgba(0,136,255,0.1); color: var(--accent2); border: 1px solid rgba(0,136,255,0.3); }
+  .badge-orange{ background: rgba(255,107,53,0.1); color: var(--accent3); border: 1px solid rgba(255,107,53,0.3); }
+
+  /* Section labels */
+  .section-label {
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .section-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* Pipeline flow */
+  .pipeline {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    margin-bottom: 60px;
+    overflow-x: auto;
+    padding-bottom: 8px;
+  }
+
+  .pipeline-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .pipeline-node {
+    width: 100px;
+    height: 80px;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-align: center;
+    border: 1px solid;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .pipeline-node::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .pipeline-node:hover::before { opacity: 1; }
+  .pipeline-node:hover { transform: translateY(-3px); }
+
+  .pipeline-node .icon { font-size: 22px; }
+  .pipeline-node .step-num {
+    position: absolute;
+    top: 4px;
+    left: 6px;
+    font-size: 9px;
+    opacity: 0.5;
+  }
+
+  .step-scrape   { background: rgba(0,255,136,0.08); border-color: rgba(0,255,136,0.4); color: var(--accent); }
+  .step-scrape::before { background: rgba(0,255,136,0.05); }
+  .step-filter   { background: rgba(0,136,255,0.08); border-color: rgba(0,136,255,0.4); color: var(--accent2); }
+  .step-analyze  { background: rgba(199,125,255,0.08); border-color: rgba(199,125,255,0.4); color: var(--accent4); }
+  .step-resume   { background: rgba(255,107,53,0.08); border-color: rgba(255,107,53,0.4); color: var(--accent3); }
+  .step-apply    { background: rgba(0,255,136,0.08); border-color: rgba(0,255,136,0.4); color: var(--accent); }
+  .step-recruit  { background: rgba(0,136,255,0.08); border-color: rgba(0,136,255,0.4); color: var(--accent2); }
+  .step-outreach { background: rgba(199,125,255,0.08); border-color: rgba(199,125,255,0.4); color: var(--accent4); }
+  .step-track    { background: rgba(255,107,53,0.08); border-color: rgba(255,107,53,0.4); color: var(--accent3); }
+
+  .pipeline-arrow {
+    width: 40px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    font-size: 18px;
+    margin-bottom: 24px;
+  }
+
+  .pipeline-label {
+    font-size: 9px;
+    color: var(--muted);
+    text-align: center;
+    letter-spacing: 0.5px;
+  }
+
+  /* Module grid */
+  .modules-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 16px;
+    margin-bottom: 60px;
+  }
+
+  .module-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    transition: all 0.2s;
+    cursor: pointer;
+  }
+
+  .module-card:hover {
+    border-color: var(--border);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+  }
+
+  .module-card.active {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px rgba(0,255,136,0.2);
+  }
+
+  .module-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+
+  .module-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+
+  .module-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .module-subtitle {
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  .module-items {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .module-items li {
+    font-size: 11px;
+    color: var(--muted);
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    line-height: 1.4;
+  }
+
+  .module-items li::before {
+    content: '→';
+    color: var(--accent);
+    flex-shrink: 0;
+    opacity: 0.6;
+  }
+
+  .module-tech {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+  }
+
+  .tech-tag {
+    font-size: 9px;
+    padding: 3px 8px;
+    border-radius: 3px;
+    background: rgba(255,255,255,0.05);
+    color: var(--muted);
+    letter-spacing: 0.5px;
+  }
+
+  /* Three columns: stack, costs, risks */
+  .three-col {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+    margin-bottom: 60px;
+  }
+
+  .info-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+  }
+
+  .info-card h3 {
+    font-family: 'Syne', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    gap: 12px;
+  }
+
+  .info-row:last-child { border-bottom: none; }
+
+  .info-key {
+    font-size: 11px;
+    color: var(--muted);
+    flex-shrink: 0;
+  }
+
+  .info-val {
+    font-size: 11px;
+    color: var(--text);
+    text-align: right;
+  }
+
+  .info-val.green { color: var(--accent); }
+  .info-val.blue  { color: var(--accent2); }
+  .info-val.orange{ color: var(--accent3); }
+  .info-val.red   { color: var(--danger); }
+
+  /* Phases */
+  .phases {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 16px;
+    margin-bottom: 60px;
+  }
+
+  .phase-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+  }
+
+  .phase-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  .phase-num {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+    font-family: 'Syne', sans-serif;
+  }
+
+  .phase-1 .phase-num { background: rgba(0,255,136,0.15); color: var(--accent); }
+  .phase-2 .phase-num { background: rgba(0,136,255,0.15); color: var(--accent2); }
+  .phase-3 .phase-num { background: rgba(199,125,255,0.15); color: var(--accent4); }
+  .phase-4 .phase-num { background: rgba(255,107,53,0.15); color: var(--accent3); }
+
+  .phase-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .phase-week {
+    font-size: 10px;
+    color: var(--muted);
+  }
+
+  .phase-tasks {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .phase-tasks li {
+    font-size: 11px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+
+  .phase-tasks li::before {
+    content: '✓';
+    font-size: 10px;
+    flex-shrink: 0;
+  }
+
+  .phase-1 .phase-tasks li::before { color: var(--accent); }
+  .phase-2 .phase-tasks li::before { color: var(--accent2); }
+  .phase-3 .phase-tasks li::before { color: var(--accent4); }
+  .phase-4 .phase-tasks li::before { color: var(--accent3); }
+
+  /* Folder structure */
+  .folder-tree {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 24px;
+    margin-bottom: 60px;
+    font-size: 12px;
+    line-height: 2;
+    overflow-x: auto;
+  }
+
+  .folder-tree .dir { color: var(--accent2); }
+  .folder-tree .file { color: var(--muted); }
+  .folder-tree .comment { color: rgba(255,255,255,0.2); }
+
+  /* Sheets schema */
+  .sheet-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+    margin-bottom: 60px;
+    overflow: hidden;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+  }
+
+  .sheet-table th {
+    background: var(--surface2);
+    padding: 10px 14px;
+    text-align: left;
+    font-size: 9px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 600;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .sheet-table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+    background: var(--surface);
+  }
+
+  .sheet-table tr:last-child td { border-bottom: none; }
+
+  .col-type {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 9px;
+    font-weight: 600;
+  }
+
+  .type-string { background: rgba(0,255,136,0.1); color: var(--accent); }
+  .type-number { background: rgba(0,136,255,0.1); color: var(--accent2); }
+  .type-enum   { background: rgba(199,125,255,0.1); color: var(--accent4); }
+  .type-date   { background: rgba(255,107,53,0.1); color: var(--accent3); }
+
+  /* Animations */
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .animate { animation: fadeInUp 0.5s ease forwards; opacity: 0; }
+  .delay-1 { animation-delay: 0.1s; }
+  .delay-2 { animation-delay: 0.2s; }
+  .delay-3 { animation-delay: 0.3s; }
+  .delay-4 { animation-delay: 0.4s; }
+  .delay-5 { animation-delay: 0.5s; }
+
+  /* Pulse on accent elements */
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  .live-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: pulse 2s ease infinite;
+    display: inline-block;
+  }
+
+  /* Human speed viz */
+  .timing-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .timing-label {
+    font-size: 11px;
+    color: var(--muted);
+    width: 180px;
+    flex-shrink: 0;
+  }
+
+  .timing-track {
+    flex: 1;
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .timing-fill {
+    height: 100%;
+    border-radius: 3px;
+    animation: expandBar 1.5s ease forwards;
+  }
+
+  @keyframes expandBar {
+    from { width: 0; }
+    to { width: var(--w); }
+  }
+
+  .timing-val {
+    font-size: 11px;
+    color: var(--text);
+    width: 80px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  footer {
+    text-align: center;
+    color: var(--muted);
+    font-size: 10px;
+    letter-spacing: 2px;
+    padding-top: 40px;
+    border-top: 1px solid var(--border);
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- Header -->
+  <header class="animate">
+    <div class="title-block">
+      <h1>JOBHUNTERX</h1>
+      <p><span class="live-dot"></span> &nbsp; Architecture & LLD · v2.0 · Phases 1–3 Complete</p>
+    </div>
+    <div class="badges">
+      <span class="badge badge-green">Python 3.12</span>
+      <span class="badge badge-blue">88 Tests Passing</span>
+      <span class="badge badge-orange">Claude · Vertex AI</span>
+    </div>
+  </header>
+
+  <!-- Pipeline Flow -->
+  <div class="section-label animate delay-1">01 — Pipeline Flow</div>
+  <div class="pipeline animate delay-2">
+    <div class="pipeline-step">
+      <div class="pipeline-node step-scrape">
+        <span class="step-num">01</span>
+        <span class="icon">📡</span>
+        <span>SCRAPE</span>
+      </div>
+      <div class="pipeline-label">LinkedIn · Naukri<br>Indeed · Google</div>
+    </div>
+    <div class="pipeline-arrow">→</div>
+    <div class="pipeline-step">
+      <div class="pipeline-node step-filter">
+        <span class="step-num">02</span>
+        <span class="icon">🔽</span>
+        <span>FILTER</span>
+      </div>
+      <div class="pipeline-label">Dedupe · Salary<br>Score ≥ 60%</div>
+    </div>
+    <div class="pipeline-arrow">→</div>
+    <div class="pipeline-step">
+      <div class="pipeline-node step-analyze">
+        <span class="step-num">03</span>
+        <span class="icon">🧠</span>
+        <span>ANALYZE</span>
+      </div>
+      <div class="pipeline-label">Claude API<br>JD → Skills</div>
+    </div>
+    <div class="pipeline-arrow">→</div>
+    <div class="pipeline-step">
+      <div class="pipeline-node step-apply">
+        <span class="step-num">04</span>
+        <span class="icon">🎯</span>
+        <span>TAILOR + APPLY</span>
+      </div>
+      <div class="pipeline-label">ResumeTailor PDF<br>Playwright submit</div>
+    </div>
+    <div class="pipeline-arrow">→</div>
+    <div class="pipeline-step">
+      <div class="pipeline-node step-recruit">
+        <span class="step-num">05</span>
+        <span class="icon">🔎</span>
+        <span>RECRUIT</span>
+      </div>
+      <div class="pipeline-label">Mock + Hunter.io<br>3 per company</div>
+    </div>
+    <div class="pipeline-arrow">→</div>
+    <div class="pipeline-step">
+      <div class="pipeline-node step-outreach">
+        <span class="step-num">06</span>
+        <span class="icon">✉️</span>
+        <span>COMPOSE</span>
+      </div>
+      <div class="pipeline-label">Referral (static)<br>or Cold (Claude)</div>
+    </div>
+    <div class="pipeline-arrow">→</div>
+    <div class="pipeline-step">
+      <div class="pipeline-node step-resume">
+        <span class="step-num">07</span>
+        <span class="icon">👁️</span>
+        <span>APPROVE</span>
+      </div>
+      <div class="pipeline-label">User Review<br>Edit & Send</div>
+    </div>
+    <div class="pipeline-arrow">→</div>
+    <div class="pipeline-step">
+      <div class="pipeline-node step-track">
+        <span class="step-num">08</span>
+        <span class="icon">📊</span>
+        <span>TRACK</span>
+      </div>
+      <div class="pipeline-label">Apps + Outreach<br>Sheets + SQLite</div>
+    </div>
+  </div>
+
+  <!-- Modules -->
+  <div class="section-label animate delay-2">02 — Module Breakdown (LLD)</div>
+  <div class="modules-grid animate delay-3">
+
+    <div class="module-card">
+      <div class="module-header">
+        <div class="module-icon" style="background:rgba(0,255,136,0.1)">📡</div>
+        <div>
+          <div class="module-title">Job Scraper</div>
+          <div class="module-subtitle">src/scraper/</div>
+        </div>
+      </div>
+      <ul class="module-items">
+        <li>BaseScraper abstract class — defines search(title, location)</li>
+        <li>NaukriScraper — Public JSON API at jobapi/v3/search</li>
+        <li>LinkedInScraper — Playwright + persistent profile dir</li>
+        <li>IndeedScraper — SerpAPI google_jobs engine</li>
+        <li>scraper_factory.get_scraper(source, config)</li>
+        <li>LocalDB.already_seen() dedup before scoring</li>
+      </ul>
+      <div class="module-tech">
+        <span class="tech-tag">Playwright</span>
+        <span class="tech-tag">SerpAPI</span>
+        <span class="tech-tag">httpx</span>
+        <span class="tech-tag">Pydantic</span>
+      </div>
+    </div>
+
+    <div class="module-card">
+      <div class="module-header">
+        <div class="module-icon" style="background:rgba(199,125,255,0.1)">🧠</div>
+        <div>
+          <div class="module-title">JD Analyzer</div>
+          <div class="module-subtitle">src/analyzer/jd_analyzer.py</div>
+        </div>
+      </div>
+      <ul class="module-items">
+        <li>Claude on Vertex via anthropic[vertex] SDK</li>
+        <li>Returns JDAnalysis: match_score, missing_skills, keywords_to_include</li>
+        <li>should_apply flag — orchestrator skips if False</li>
+        <li>UsageStats tracks tokens + cost per run</li>
+        <li>tenacity retry wrapper (3 attempts, exp backoff)</li>
+        <li>Default model: claude-sonnet-4-6</li>
+      </ul>
+      <div class="module-tech">
+        <span class="tech-tag">anthropic[vertex]</span>
+        <span class="tech-tag">tenacity</span>
+        <span class="tech-tag">Strict JSON</span>
+      </div>
+    </div>
+
+    <div class="module-card">
+      <div class="module-header">
+        <div class="module-icon" style="background:rgba(255,107,53,0.1)">📄</div>
+        <div>
+          <div class="module-title">Resume Tailor</div>
+          <div class="module-subtitle">src/resume/resume_tailor.py</div>
+        </div>
+      </div>
+      <ul class="module-items">
+        <li>Reorders Technical Skills by JD keywords_to_include</li>
+        <li>Zero hallucination — content unchanged, only order changes</li>
+        <li>Parses SKILLS_BLOCK markers in resume_template.html</li>
+        <li>Renders PDF via Playwright page.pdf() to output/</li>
+        <li>Filename: {company}_{role}.pdf (sanitized)</li>
+        <li>Falls back to static PDF on Playwright failure</li>
+        <li>Toggleable: user_config.use_tailored_resume</li>
+      </ul>
+      <div class="module-tech">
+        <span class="tech-tag">Playwright PDF</span>
+        <span class="tech-tag">Keyword reorder</span>
+        <span class="tech-tag">+15-20 ATS pts</span>
+      </div>
+    </div>
+
+    <div class="module-card">
+      <div class="module-header">
+        <div class="module-icon" style="background:rgba(0,255,136,0.1)">🤖</div>
+        <div>
+          <div class="module-title">Human Behavior</div>
+          <div class="module-subtitle">src/utils/human_behavior.py</div>
+        </div>
+      </div>
+      <ul class="module-items">
+        <li>random_delay() — Gaussian distribution, not uniform</li>
+        <li>type_text() — per-keystroke delay 50-150ms</li>
+        <li>human_click() — random offset, pre/post delays</li>
+        <li>read_and_pause() — ~200ms per word of JD</li>
+        <li>5-15 min gap between applications</li>
+        <li>10-20 min long break every 3rd app</li>
+      </ul>
+      <div class="module-tech">
+        <span class="tech-tag">playwright-stealth</span>
+        <span class="tech-tag">Gaussian</span>
+        <span class="tech-tag">Persistent context</span>
+      </div>
+    </div>
+
+    <div class="module-card">
+      <div class="module-header">
+        <div class="module-icon" style="background:rgba(0,255,136,0.1)">🎯</div>
+        <div>
+          <div class="module-title">Application Engine</div>
+          <div class="module-subtitle">src/apply/</div>
+        </div>
+      </div>
+      <ul class="module-items">
+        <li>LinkedInApplier — Easy Apply multi-step modal</li>
+        <li>NaukriApplier — Naukri quick apply flow</li>
+        <li>FormFiller — heuristic field classifier (label/aria/placeholder)</li>
+        <li>ScreeningQA — Claude on Vertex for unmapped fields</li>
+        <li>captcha_detector — detect → screenshot → console confirm (no DOM polling)</li>
+        <li>CAPTCHA policy: bot goes idle, human presses Enter, bot resumes with human pacing</li>
+        <li>DailyLimiter — caps at DAILY_LIMIT/day (default 15) via SQLite</li>
+        <li>ApplyResult: SUBMITTED | SKIPPED | FAILED | CAPTCHA | REDIRECT</li>
+      </ul>
+      <div class="module-tech">
+        <span class="tech-tag">Playwright async</span>
+        <span class="tech-tag">Claude on Vertex</span>
+        <span class="tech-tag">Pydantic</span>
+      </div>
+    </div>
+
+    <div class="module-card">
+      <div class="module-header">
+        <div class="module-icon" style="background:rgba(0,136,255,0.1)">🔎</div>
+        <div>
+          <div class="module-title">Recruiter Finder</div>
+          <div class="module-subtitle">src/outreach/recruiter_finder.py</div>
+        </div>
+      </div>
+      <ul class="module-items">
+        <li>BaseRecruiterFinder abstract → find(company, max_results)</li>
+        <li>MockRecruiterFinder — deterministic dummies for tests/dry-run</li>
+        <li>HunterRecruiterFinder — domain search, filters by title</li>
+        <li>Returns: name, title, email, linkedin_url, confidence</li>
+        <li>Targets: recruiter, talent, hr, hiring, manager keywords</li>
+        <li>Apollo.io adapter planned (Phase 4)</li>
+      </ul>
+      <div class="module-tech">
+        <span class="tech-tag">Hunter.io</span>
+        <span class="tech-tag">httpx</span>
+        <span class="tech-tag">Pydantic</span>
+      </div>
+    </div>
+
+    <div class="module-card">
+      <div class="module-header">
+        <div class="module-icon" style="background:rgba(199,125,255,0.1)">✉️</div>
+        <div>
+          <div class="module-title">Email Composer</div>
+          <div class="module-subtitle">src/outreach/</div>
+        </div>
+      </div>
+      <ul class="module-items">
+        <li>ReferralTemplate — static, includes job_link + current_company="Lucid Motors (LTM)"</li>
+        <li>LinkedInDMTemplate — DM to 1st-degree connections (job link + LTM)</li>
+        <li>LinkedInInviteTemplate — connection-request note ≤300 chars</li>
+        <li>ColdEmailComposer — Claude on Vertex personalization</li>
+        <li>Strict JSON output: {subject, body}, ≤80 word body</li>
+        <li>Falls back to ReferralTemplate on AI failure</li>
+        <li>Outreach emails always attach static sameet_sabu_resume.pdf</li>
+      </ul>
+      <div class="module-tech">
+        <span class="tech-tag">Static template</span>
+        <span class="tech-tag">Claude on Vertex</span>
+        <span class="tech-tag">Auto fallback</span>
+      </div>
+    </div>
+
+    <div class="module-card">
+      <div class="module-header">
+        <div class="module-icon" style="background:rgba(0,255,136,0.1)">👁️</div>
+        <div>
+          <div class="module-title">Approval Engine</div>
+          <div class="module-subtitle">src/outreach/approval_engine.py</div>
+        </div>
+      </div>
+      <ul class="module-items">
+        <li>3 modes: INTERACTIVE | AUTO_APPROVE | AUTO_REJECT</li>
+        <li>CLI prompt: [A]pprove / [E]dit / [R]eject / [S]kip</li>
+        <li>Edit opens $EDITOR (or notepad on Windows)</li>
+        <li>Parses SUBJECT: line + body after edit</li>
+        <li>Status updates: DRAFTED → APPROVED | EDITED | REJECTED</li>
+        <li>Auto modes for CI / scheduled runs</li>
+      </ul>
+      <div class="module-tech">
+        <span class="tech-tag">stdin/stdout</span>
+        <span class="tech-tag">$EDITOR</span>
+        <span class="tech-tag">enum modes</span>
+      </div>
+    </div>
+
+    <div class="module-card">
+      <div class="module-header">
+        <div class="module-icon" style="background:rgba(255,107,53,0.1)">📤</div>
+        <div>
+          <div class="module-title">Email Sender</div>
+          <div class="module-subtitle">src/outreach/email_sender.py</div>
+        </div>
+      </div>
+      <ul class="module-items">
+        <li>BaseEmailSender abstract → send(message, attachment)</li>
+        <li>DryRunEmailSender — logs + stores in .sent list</li>
+        <li>SMTPEmailSender — Gmail SMTP via App Password (port 465 SSL)</li>
+        <li>Refuses if status != APPROVED/EDITED</li>
+        <li>Refuses if recruiter has no email</li>
+        <li>Attaches tailored resume PDF when configured</li>
+        <li>Returns SendResult(success, message_id, error)</li>
+      </ul>
+      <div class="module-tech">
+        <span class="tech-tag">smtplib</span>
+        <span class="tech-tag">Gmail App Password</span>
+        <span class="tech-tag">PDF attach</span>
+      </div>
+    </div>
+
+    <div class="module-card">
+      <div class="module-header">
+        <div class="module-icon" style="background:rgba(0,136,255,0.1)">🎼</div>
+        <div>
+          <div class="module-title">Outreach Orchestrator</div>
+          <div class="module-subtitle">src/outreach/orchestrator.py</div>
+        </div>
+      </div>
+      <ul class="module-items">
+        <li>Wires finder + composer + approval + sender + tracker</li>
+        <li>build_orchestrator_from_config(user_config, db, sheets)</li>
+        <li>reach_out_for_job(scored, resume_path, daily_remaining)</li>
+        <li>90-day cooldown: skips already_contacted recruiters</li>
+        <li>Daily limit: stops at user_config.daily_outreach_limit (20)</li>
+        <li>Persists draft + final state to LocalDB.outreach</li>
+        <li>Appends to GoogleSheets.Outreach tab</li>
+      </ul>
+      <div class="module-tech">
+        <span class="tech-tag">Composition root</span>
+        <span class="tech-tag">Cooldown logic</span>
+        <span class="tech-tag">Daily limiter</span>
+      </div>
+    </div>
+
+    <div class="module-card">
+      <div class="module-header">
+        <div class="module-icon" style="background:rgba(255,107,53,0.1)">📊</div>
+        <div>
+          <div class="module-title">Tracker</div>
+          <div class="module-subtitle">src/tracker/</div>
+        </div>
+      </div>
+      <ul class="module-items">
+        <li>local_db.py — SQLite jobs + outreach tables</li>
+        <li>upsert_outreach, already_contacted, outreach_count_today</li>
+        <li>google_sheets.py — service account auth via gspread</li>
+        <li>Tab 1: Applications (20 cols) · Tab 2: Outreach (16 cols)</li>
+        <li>Auto-creates tabs + headers on init()</li>
+        <li>schema.py — Status + OutreachStatus enums</li>
+      </ul>
+      <div class="module-tech">
+        <span class="tech-tag">sqlite3 stdlib</span>
+        <span class="tech-tag">gspread</span>
+        <span class="tech-tag">SHEET_COLUMNS</span>
+      </div>
+    </div>
+
+    <div class="module-card">
+      <div class="module-header">
+        <div class="module-icon" style="background:rgba(0,255,136,0.1)">🧪</div>
+        <div>
+          <div class="module-title">Test Suite</div>
+          <div class="module-subtitle">tests/ · 88 passing</div>
+        </div>
+      </div>
+      <ul class="module-items">
+        <li>test_resume_tailor.py — 18 tests · keyword reorder + perf</li>
+        <li>test_referral_template.py — 25 tests · static template</li>
+        <li>test_recruiter_finder.py — 13 tests · Mock + factory</li>
+        <li>test_approval_engine.py — 11 tests · interactive + auto</li>
+        <li>test_email_sender.py — 14 tests · DryRun + SMTP</li>
+        <li>test_outreach_orchestrator.py — 10 tests · end-to-end</li>
+        <li>scripts/test_phase3_dry_run.py — full Phase 3 smoke test</li>
+      </ul>
+      <div class="module-tech">
+        <span class="tech-tag">pytest 9</span>
+        <span class="tech-tag">monkeypatch</span>
+        <span class="tech-tag">~2s total</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Human Speed Timing -->
+  <div class="section-label animate delay-3">03 — Human Speed Timing</div>
+  <div class="info-card animate delay-3" style="margin-bottom:60px">
+    <h3>⏱️ Randomized Delays Per Action</h3>
+    <div class="timing-bar">
+      <div class="timing-label">Between keystrokes</div>
+      <div class="timing-track"><div class="timing-fill" style="--w:15%; background:var(--accent)"></div></div>
+      <div class="timing-val" style="color:var(--accent)">50–150ms</div>
+    </div>
+    <div class="timing-bar">
+      <div class="timing-label">After click action</div>
+      <div class="timing-track"><div class="timing-fill" style="--w:30%; background:var(--accent2)"></div></div>
+      <div class="timing-val" style="color:var(--accent2)">500ms–2s</div>
+    </div>
+    <div class="timing-bar">
+      <div class="timing-label">Reading JD before apply</div>
+      <div class="timing-track"><div class="timing-fill" style="--w:50%; background:var(--accent4)"></div></div>
+      <div class="timing-val" style="color:var(--accent4)">2s–5s</div>
+    </div>
+    <div class="timing-bar">
+      <div class="timing-label">Between form fields</div>
+      <div class="timing-track"><div class="timing-fill" style="--w:40%; background:var(--accent3)"></div></div>
+      <div class="timing-val" style="color:var(--accent3)">1s–4s</div>
+    </div>
+    <div class="timing-bar">
+      <div class="timing-label">Between applications</div>
+      <div class="timing-track"><div class="timing-fill" style="--w:70%; background:var(--accent)"></div></div>
+      <div class="timing-val" style="color:var(--accent)">5min–15min</div>
+    </div>
+    <div class="timing-bar">
+      <div class="timing-label">After every 3 applications (break)</div>
+      <div class="timing-track"><div class="timing-fill" style="--w:85%; background:var(--accent2)"></div></div>
+      <div class="timing-val" style="color:var(--accent2)">10min–20min</div>
+    </div>
+    <div class="timing-bar" style="border-bottom:none">
+      <div class="timing-label">Daily schedule (Mon–Fri)</div>
+      <div class="timing-track"><div class="timing-fill" style="--w:60%; background:var(--accent4)"></div></div>
+      <div class="timing-val" style="color:var(--accent4)">9AM → 1PM</div>
+    </div>
+  </div>
+
+  <!-- Stack + Cost + Risks -->
+  <div class="section-label animate delay-3">04 — Stack · Costs · Risks</div>
+  <div class="three-col animate delay-4">
+
+    <div class="info-card">
+      <h3>🛠️ Tech Stack</h3>
+      <div class="info-row"><span class="info-key">Runtime</span><span class="info-val blue">Python 3.12</span></div>
+      <div class="info-row"><span class="info-key">Browser</span><span class="info-val blue">Playwright + stealth</span></div>
+      <div class="info-row"><span class="info-key">AI</span><span class="info-val green">Claude on Vertex AI</span></div>
+      <div class="info-row"><span class="info-key">Models</span><span class="info-val">Pydantic v2</span></div>
+      <div class="info-row"><span class="info-key">Job APIs</span><span class="info-val blue">SerpAPI + Naukri JSON</span></div>
+      <div class="info-row"><span class="info-key">Email Finder</span><span class="info-val blue">Mock + Hunter.io</span></div>
+      <div class="info-row"><span class="info-key">Resume</span><span class="info-val green">Keyword-reorder tailoring</span></div>
+      <div class="info-row"><span class="info-key">Tracking</span><span class="info-val green">Google Sheets (gspread)</span></div>
+      <div class="info-row"><span class="info-key">Local DB</span><span class="info-val">SQLite (jobs + outreach)</span></div>
+      <div class="info-row"><span class="info-key">Email</span><span class="info-val">smtplib + Gmail App Password</span></div>
+      <div class="info-row"><span class="info-key">Logging</span><span class="info-val">loguru + tenacity retries</span></div>
+      <div class="info-row"><span class="info-key">Tests</span><span class="info-val green">pytest · 88 passing</span></div>
+    </div>
+
+    <div class="info-card">
+      <h3>💰 Monthly Cost Estimate</h3>
+      <div class="info-row"><span class="info-key">Claude on Vertex (15 JD/day)</span><span class="info-val green">~$6.00</span></div>
+      <div class="info-row"><span class="info-key">Cold email composer (optional)</span><span class="info-val green">~$1.50</span></div>
+      <div class="info-row"><span class="info-key">Referral template (static)</span><span class="info-val green">$0</span></div>
+      <div class="info-row"><span class="info-key">SerpAPI (free: 100/mo)</span><span class="info-val green">$0</span></div>
+      <div class="info-row"><span class="info-key">Hunter.io (free: 25/mo)</span><span class="info-val green">$0</span></div>
+      <div class="info-row"><span class="info-key">Hunter.io (starter: 500/mo)</span><span class="info-val orange">$49</span></div>
+      <div class="info-row"><span class="info-key">SerpAPI (paid: 5000/mo)</span><span class="info-val orange">$50</span></div>
+      <div class="info-row"><span class="info-key">Google Sheets + Gmail SMTP</span><span class="info-val green">$0</span></div>
+      <div class="info-row" style="border-top:2px solid var(--border); margin-top:8px">
+        <span class="info-key" style="font-weight:700">Minimum (free tiers)</span>
+        <span class="info-val green" style="font-weight:700">~$6/mo</span>
+      </div>
+      <div class="info-row">
+        <span class="info-key" style="font-weight:700">Full scale</span>
+        <span class="info-val orange" style="font-weight:700">~$105/mo</span>
+      </div>
+      <div class="info-row">
+        <span class="info-key" style="font-weight:700">Pure dry-run (mock+referral)</span>
+        <span class="info-val green" style="font-weight:700">~$3/mo</span>
+      </div>
+    </div>
+
+    <div class="info-card">
+      <h3>⚠️ Risks & Mitigations</h3>
+      <div class="info-row">
+        <span class="info-key">LinkedIn ban</span>
+        <span class="info-val green">Stealth + persistent context + 15/day</span>
+      </div>
+      <div class="info-row">
+        <span class="info-key">Bad cold email content</span>
+        <span class="info-val green">Approval gate before send</span>
+      </div>
+      <div class="info-row">
+        <span class="info-key">Duplicate apply</span>
+        <span class="info-val green">LocalDB.already_seen() + applied_recently()</span>
+      </div>
+      <div class="info-row">
+        <span class="info-key">Spam recruiter same week</span>
+        <span class="info-val green">already_contacted() 90-day cooldown</span>
+      </div>
+      <div class="info-row">
+        <span class="info-key">CAPTCHA on apply</span>
+        <span class="info-val orange">Screenshot → console confirm (no DOM polling) → resume with human pacing</span>
+      </div>
+      <div class="info-row">
+        <span class="info-key">Resume hallucination</span>
+        <span class="info-val green">Reorder only, never rewrite content</span>
+      </div>
+      <div class="info-row">
+        <span class="info-key">API rate limits</span>
+        <span class="info-val green">tenacity exponential backoff</span>
+      </div>
+      <div class="info-row">
+        <span class="info-key">Sheets quota exceeded</span>
+        <span class="info-val green">SQLite primary, Sheets async layer</span>
+      </div>
+      <div class="info-row">
+        <span class="info-key">Hunter.io quota</span>
+        <span class="info-val orange">Mock fallback; Apollo planned (P4)</span>
+      </div>
+      <div class="info-row">
+        <span class="info-key">SMTP send failure</span>
+        <span class="info-val green">Status=FAILED, error logged in DB+Sheets</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Phases -->
+  <div class="section-label animate delay-4">05 — Implementation Phases</div>
+  <div class="phases animate delay-5">
+    <div class="phase-card phase-1">
+      <div class="phase-header">
+        <div class="phase-num">1</div>
+        <div>
+          <div class="phase-title">Foundation ✓</div>
+          <div class="phase-week">Complete</div>
+        </div>
+      </div>
+      <ul class="phase-tasks">
+        <li>✓ user_config.py + .env</li>
+        <li>✓ NaukriScraper (public JSON API)</li>
+        <li>✓ LinkedInScraper (Playwright)</li>
+        <li>✓ IndeedScraper (SerpAPI)</li>
+        <li>✓ Always scrape BOTH LinkedIn + Naukri (scrape_on_platforms)</li>
+        <li>✓ Cross-source dedup by (company, title)</li>
+        <li>✓ Top N = DAILY_LIMIT from .env (default 15)</li>
+        <li>✓ JDAnalyzer (Claude on Vertex)</li>
+        <li>✓ MatchScorer (skill overlap)</li>
+        <li>✓ GoogleSheets tracker</li>
+        <li>✓ LocalDB SQLite dedup</li>
+      </ul>
+    </div>
+
+    <div class="phase-card phase-2">
+      <div class="phase-header">
+        <div class="phase-num">2</div>
+        <div>
+          <div class="phase-title">Apply Engine ✓</div>
+          <div class="phase-week">Complete</div>
+        </div>
+      </div>
+      <ul class="phase-tasks">
+        <li>✓ HumanBehavior engine</li>
+        <li>✓ LinkedInApplier (Easy Apply)</li>
+        <li>✓ NaukriApplier (quick apply)</li>
+        <li>✓ FormFiller + ScreeningQA</li>
+        <li>✓ DailyLimiter (DAILY_LIMIT/day, default 15)</li>
+        <li>✓ ResumeTailor (keyword reorder + PDF) — JD-tailored for apply only</li>
+        <li>✓ playwright-stealth integration</li>
+        <li>✓ CAPTCHA: screenshot → console confirm → resume (no DOM polling)</li>
+      </ul>
+    </div>
+
+    <div class="phase-card phase-3">
+      <div class="phase-header">
+        <div class="phase-num">3</div>
+        <div>
+          <div class="phase-title">Outreach + Approval ✓</div>
+          <div class="phase-week">Complete</div>
+        </div>
+      </div>
+      <ul class="phase-tasks">
+        <li>✓ RecruiterFinder (Mock + Hunter.io)</li>
+        <li>✓ ReferralTemplate (static, job link + Lucid Motors LTM)</li>
+        <li>✓ ColdEmailComposer (Claude on Vertex)</li>
+        <li>✓ ApprovalEngine (interactive + auto modes)</li>
+        <li>✓ EmailSender (DryRun + SMTP, always attaches static resume)</li>
+        <li>✓ OutreachOrchestrator</li>
+        <li>✓ LinkedInDMTemplate + LinkedInInviteTemplate (≤300 chars)</li>
+        <li>✓ LinkedInOutreachOrchestrator (DM vs invite routing)</li>
+        <li>✓ Cooldown + daily limit (20/day)</li>
+        <li>✓ Outreach tab: channel field = email / linkedin_msg / linkedin_invite</li>
+      </ul>
+    </div>
+
+    <div class="phase-card phase-4">
+      <div class="phase-header">
+        <div class="phase-num">4</div>
+        <div>
+          <div class="phase-title">Dashboard + Polish</div>
+          <div class="phase-week">Pending</div>
+        </div>
+      </div>
+      <ul class="phase-tasks">
+        <li>□ Web UI for live monitoring</li>
+        <li>□ APScheduler (Mon–Fri 9AM cron)</li>
+        <li>□ Apollo.io recruiter adapter</li>
+        <li>□ PlaywrightLinkedInOutreach full implementation</li>
+        <li>□ Gmail inbox watch (response tracking)</li>
+        <li>□ Stats dashboard (apply rate, response rate)</li>
+        <li>□ Production deployment guide</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Google Sheets Schema -->
+  <div class="section-label animate delay-4">06 — Google Sheets Schema</div>
+  <div style="margin-bottom:30px; padding:20px; background:rgba(0,255,136,0.1); border:1px solid rgba(0,255,136,0.3); border-radius:10px;">
+    <p style="font-size:12px; color:#e0e0f0; margin-bottom:10px;"><strong>Tab 1: Applications</strong> — 20 columns · src/tracker/schema.py:SHEET_COLUMNS</p>
+    <p style="font-size:12px; color:#e0e0f0;"><strong>Tab 2: Outreach</strong> — 16 columns · src/tracker/schema.py:OUTREACH_COLUMNS</p>
+  </div>
+  <table class="sheet-table animate delay-5">
+    <thead>
+      <tr>
+        <th>Column</th>
+        <th>Type</th>
+        <th>Description</th>
+        <th>Example</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr style="background:rgba(0,255,136,0.05)"><td colspan="4" style="font-weight:700; padding:12px 14px; color:var(--accent)">TAB 1: APPLICATIONS (20 columns)</td></tr>
+      <tr><td>Date Applied</td><td><span class="col-type type-date">date</span></td><td>UTC timestamp when application was submitted</td><td>2026-05-05 14:32</td></tr>
+      <tr><td>Company</td><td><span class="col-type type-string">string</span></td><td>Company name</td><td>Google</td></tr>
+      <tr><td>Role</td><td><span class="col-type type-string">string</span></td><td>Exact job title</td><td>Senior SWE</td></tr>
+      <tr><td>Salary Offered</td><td><span class="col-type type-string">string</span></td><td>Salary from JD (or empty)</td><td>30-40 LPA</td></tr>
+      <tr><td>Location</td><td><span class="col-type type-string">string</span></td><td>Job location</td><td>Bangalore / Remote</td></tr>
+      <tr><td>Source</td><td><span class="col-type type-enum">enum</span></td><td>Platform: linkedin / naukri / indeed</td><td>naukri</td></tr>
+      <tr><td>Apply URL</td><td><span class="col-type type-string">string</span></td><td>Link to job posting</td><td>linkedin.com/jobs/...</td></tr>
+      <tr><td>Status</td><td><span class="col-type type-enum">enum</span></td><td>Scraped, Applied, Interview, Offer, ...</td><td>Applied</td></tr>
+      <tr><td>Match Score (%)</td><td><span class="col-type type-number">number</span></td><td>Claude JD analysis score</td><td>82</td></tr>
+      <tr><td>Missing Skills</td><td><span class="col-type type-string">string</span></td><td>JD skills not in candidate's profile</td><td>Kubernetes, Go</td></tr>
+      <tr><td>Resume Used</td><td><span class="col-type type-string">string</span></td><td>Path to tailored PDF</td><td>output/Google_SWE.pdf</td></tr>
+      <tr><td>Recruiters Found</td><td><span class="col-type type-number">number</span></td><td>Count of recruiters discovered</td><td>3</td></tr>
+      <tr><td>Recruiter Emails</td><td><span class="col-type type-string">string</span></td><td>Comma-separated emails</td><td>priya@..., raj@...</td></tr>
+      <tr><td>Recruiter LinkedIn</td><td><span class="col-type type-string">string</span></td><td>Comma-separated LinkedIn URLs</td><td>linkedin.com/in/...</td></tr>
+      <tr><td>LinkedIn Msg Sent</td><td><span class="col-type type-enum">enum</span></td><td>Yes / No / N/A (Phase 4)</td><td>N/A</td></tr>
+      <tr><td>Email Sent</td><td><span class="col-type type-enum">enum</span></td><td>Yes / No / Failed</td><td>Yes</td></tr>
+      <tr><td>Referral Status</td><td><span class="col-type type-enum">enum</span></td><td>Pending / Approved / Rejected</td><td>Approved</td></tr>
+      <tr><td>Response Received</td><td><span class="col-type type-enum">enum</span></td><td>Reply from company</td><td>Yes / No / Ghosted</td></tr>
+      <tr><td>Interview Date</td><td><span class="col-type type-date">date</span></td><td>Interview scheduled</td><td>2026-05-15</td></tr>
+      <tr><td>Notes</td><td><span class="col-type type-string">string</span></td><td>Confirmation text + screenshot path</td><td>Application submitted | screenshot: ...</td></tr>
+
+      <tr style="background:rgba(0,136,255,0.05)"><td colspan="4" style="font-weight:700; padding:12px 14px; color:var(--accent2)">TAB 2: OUTREACH (16 columns)</td></tr>
+      <tr><td>Date</td><td><span class="col-type type-date">date</span></td><td>UTC timestamp of draft creation</td><td>2026-05-05 14:35</td></tr>
+      <tr><td>Recruiter</td><td><span class="col-type type-string">string</span></td><td>Recruiter full name</td><td>Priya Sharma</td></tr>
+      <tr><td>Title</td><td><span class="col-type type-string">string</span></td><td>Job title/role</td><td>Senior Technical Recruiter</td></tr>
+      <tr><td>Company</td><td><span class="col-type type-string">string</span></td><td>Company name</td><td>Google</td></tr>
+      <tr><td>Email</td><td><span class="col-type type-string">string</span></td><td>Recruiter email</td><td>priya.sharma@google.com</td></tr>
+      <tr><td>LinkedIn</td><td><span class="col-type type-string">string</span></td><td>LinkedIn profile URL</td><td>linkedin.com/in/priya-sharma</td></tr>
+      <tr><td>Source</td><td><span class="col-type type-enum">enum</span></td><td>How recruiter was found</td><td>mock / hunter / linkedin</td></tr>
+      <tr><td>Channel</td><td><span class="col-type type-enum">enum</span></td><td>Outreach channel</td><td>email / linkedin_msg / linkedin_invite</td></tr>
+      <tr><td>Style</td><td><span class="col-type type-enum">enum</span></td><td>Email style</td><td>referral (static) / cold (AI)</td></tr>
+      <tr><td>Job Title</td><td><span class="col-type type-string">string</span></td><td>Related job posting title</td><td>Senior Backend Engineer</td></tr>
+      <tr><td>Subject</td><td><span class="col-type type-string">string</span></td><td>Email subject line</td><td>Referral Request — SWE at Google</td></tr>
+      <tr><td>Body Preview</td><td><span class="col-type type-string">string</span></td><td>First 200 chars of body</td><td>Hi Priya, I came across the SWE...</td></tr>
+      <tr><td>Status</td><td><span class="col-type type-enum">enum</span></td><td>OutreachStatus enum value</td><td>drafted / approved / sent / failed</td></tr>
+      <tr><td>Message Approved</td><td><span class="col-type type-enum">enum</span></td><td>Yes if approved/edited/sent</td><td>Yes</td></tr>
+      <tr><td>Sent At</td><td><span class="col-type type-date">date</span></td><td>Send timestamp (empty if not sent)</td><td>2026-05-05 14:36</td></tr>
+      <tr><td>Error</td><td><span class="col-type type-string">string</span></td><td>SMTP error message if FAILED</td><td>(empty on success)</td></tr>
+    </tbody>
+  </table>
+
+  <footer>
+    JOBHUNTERX · ARCHITECTURE v2.0 · PYTHON 3.12 · CLAUDE ON VERTEX · PLAYWRIGHT · 88 TESTS
+  </footer>
+
+</div>
+
+</body>
+</html>

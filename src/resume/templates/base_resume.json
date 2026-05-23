@@ -1,0 +1,38 @@
+{
+  "name": "Your Name",
+  "headline": "Senior Software Engineer | Python, FastAPI, AWS",
+  "contact": {
+    "email": "you@example.com",
+    "phone": "+91-00000-00000",
+    "linkedin": "https://www.linkedin.com/in/your-handle",
+    "github": "https://github.com/your-handle",
+    "location": "Bangalore, India"
+  },
+  "summary": "Backend-leaning engineer with 4+ years building distributed Python services on AWS. Comfortable across FastAPI, PostgreSQL, and event-driven systems.",
+  "skills": {
+    "languages": ["Python", "TypeScript", "SQL"],
+    "frameworks": ["FastAPI", "Django", "React"],
+    "infra": ["AWS", "Docker", "Kubernetes", "Terraform"],
+    "data": ["PostgreSQL", "Redis", "Kafka"]
+  },
+  "experience": [
+    {
+      "company": "Example Co",
+      "role": "Software Engineer II",
+      "start": "2022-03",
+      "end": "Present",
+      "bullets": [
+        "Owned the billing service: 99.95% uptime over 18 months on AWS Fargate.",
+        "Cut p95 latency by 38% by replacing N+1 ORM calls with batched async queries.",
+        "Led migration of 6 microservices from REST to gRPC, reducing inter-service overhead 4x."
+      ]
+    }
+  ],
+  "education": [
+    {
+      "school": "Your University",
+      "degree": "B.Tech, Computer Science",
+      "year": "2021"
+    }
+  ]
+}

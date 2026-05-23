@@ -1,0 +1,38 @@
+# Environment & Credentials
+.env
+credentials.json
+
+# Personal Configuration (not shared across team)
+config/user_config.py
+
+# Personal Files (resume + contact info)
+sameet_sabu_resume.pdf
+sameet_sabu_resume_updated.html
+src/resume/templates/resume_template.html
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Data & Logs
+data/
+data/*.sqlite
+data/*.sqlite-journal
+logs/
+*.log
+output/
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
