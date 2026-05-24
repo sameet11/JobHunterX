@@ -123,8 +123,7 @@ JobHunterX/
 │   ├── resume/
 │   │   ├── resume_tailor.py        # Reorders skills by JD keywords → PDF
 │   │   └── templates/
-│   │       ├── resume_template.html  # (gitignored)
-│   │       └── base_resume.json
+│   │       └── resume_template.html  # (gitignored)
 │   │
 │   ├── outreach/
 │   │   ├── browser_finder.py       # Playwright LinkedIn people search

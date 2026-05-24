@@ -41,9 +41,6 @@ class PlatformConfig:
 
     google_sheet_id: str = _get("GOOGLE_SHEET_ID")
 
-    database_url: str = _get("DATABASE_URL")
-
-    daily_limit: int = _get_int("DAILY_LIMIT", 15)
     min_match_score: int = _get_int("MIN_MATCH_SCORE", 60)
     log_level: str = _get("LOG_LEVEL", "INFO")
 
