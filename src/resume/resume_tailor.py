@@ -121,15 +121,7 @@ def _extract_summary(html: str) -> str:
 
 def _generate_summary(original: str, company: str, role: str, keywords: list[str]) -> str:
     try:
-        from src.utils.gemini_client import get_model, text_generation_config
-        model = get_model(
-            system_instruction=(
-                "You are a professional resume writer. Rewrite the summary to be ATS-optimized "
-                "for a specific role. Rules: (1) 2-3 sentences max, (2) include 3-5 of the provided "
-                "keywords naturally, (3) keep all quantified achievements from the original, "
-                "(4) do NOT add fake skills or experience, (5) plain text only, no markdown or HTML."
-            )
-        )
+        from src.utils.gemini_client import generate_text
         top_kw = ", ".join(keywords[:8])
         prompt = (
             f"Target role: {role} at {company}\n"
@@ -137,8 +129,16 @@ def _generate_summary(original: str, company: str, role: str, keywords: list[str
             f"Original summary:\n{original}\n\n"
             f"Rewrite:"
         )
-        response = model.generate_content(prompt, generation_config=text_generation_config(max_tokens=160))
-        text = response.text.strip()
+        text = generate_text(
+            prompt,
+            system_instruction=(
+                "You are a professional resume writer. Rewrite the summary to be ATS-optimized "
+                "for a specific role. Rules: (1) 2-3 sentences max, (2) include 3-5 of the provided "
+                "keywords naturally, (3) keep all quantified achievements from the original, "
+                "(4) do NOT add fake skills or experience, (5) plain text only, no markdown or HTML."
+            ),
+            max_tokens=160,
+        ).strip()
         if text:
             logger.info(f"Gemini tailored summary for {company} — {role}")
             return text

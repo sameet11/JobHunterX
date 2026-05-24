@@ -23,22 +23,18 @@ pip install -r requirements.txt
 .\.venv\Scripts\playwright.exe install chromium   # one-time browser binary download
 ```
 
-### 2. GCP authentication (for Gemini / resume tailoring)
-```powershell
-gcloud auth application-default login
-gcloud config set project YOUR_GCP_PROJECT_ID
-```
+### 2. Gemini API key (for resume tailoring)
+Get a free key at https://aistudio.google.com/apikey
 
 ### 3. Configure `.env`
 ```powershell
 cp .env.example .env
 ```
 
-Minimum required (Vertex AI for resume tailoring):
+Minimum required (Gemini for resume tailoring):
 ```env
-GOOGLE_CLOUD_PROJECT=your-gcp-project
-GOOGLE_CLOUD_REGION=us-central1
-GEMINI_MODEL=gemini-2.0-flash-001
+GEMINI_API_KEY=your-gemini-api-key
+GEMINI_MODEL=gemini-2.0-flash
 ```
 
 Add as needed:

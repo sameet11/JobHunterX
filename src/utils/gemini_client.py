@@ -1,40 +1,41 @@
-"""Shared Gemini (Vertex AI) client factory."""
+"""Shared Gemini client (google-genai SDK with GEMINI_API_KEY)."""
 
 from __future__ import annotations
 
-import vertexai
-from vertexai.generative_models import GenerationConfig, GenerativeModel
+from google import genai
+from google.genai import types
 
 from config.platform_config import platform
 
-_initialized = False
+_client: genai.Client | None = None
 
 
-def _ensure_init() -> None:
-    global _initialized
-    if not _initialized:
-        vertexai.init(project=platform.gcp_project, location=platform.gcp_region)
-        _initialized = True
+def _get_client() -> genai.Client:
+    global _client
+    if _client is None:
+        if not platform.gemini_api_key:
+            raise RuntimeError("GEMINI_API_KEY is not set in environment")
+        _client = genai.Client(api_key=platform.gemini_api_key)
+    return _client
 
 
-def get_model(system_instruction: str, model: str | None = None) -> GenerativeModel:
-    _ensure_init()
-    return GenerativeModel(
-        model_name=model or platform.gemini_model,
-        system_instruction=system_instruction,
+def generate_text(
+    prompt: str,
+    system_instruction: str,
+    max_tokens: int = 128,
+    json_mode: bool = False,
+    model: str | None = None,
+) -> str:
+    config_kwargs: dict = {
+        "system_instruction": system_instruction,
+        "temperature": 0.0,
+        "max_output_tokens": max_tokens,
+    }
+    if json_mode:
+        config_kwargs["response_mime_type"] = "application/json"
+    response = _get_client().models.generate_content(
+        model=model or platform.gemini_model,
+        contents=prompt,
+        config=types.GenerateContentConfig(**config_kwargs),
     )
-
-
-def json_generation_config(max_tokens: int = 4096) -> GenerationConfig:
-    return GenerationConfig(
-        temperature=0.0,
-        max_output_tokens=max_tokens,
-        response_mime_type="application/json",
-    )
-
-
-def text_generation_config(max_tokens: int = 128) -> GenerationConfig:
-    return GenerationConfig(
-        temperature=0.0,
-        max_output_tokens=max_tokens,
-    )
+    return response.text or ""

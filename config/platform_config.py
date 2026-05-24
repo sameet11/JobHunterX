@@ -21,10 +21,8 @@ def _get_int(name: str, default: int) -> int:
 
 @dataclass(frozen=True)
 class PlatformConfig:
-    gcp_project: str = _get("GOOGLE_CLOUD_PROJECT")
-    gcp_region: str = _get("GOOGLE_CLOUD_REGION", "us-central1")
-    gemini_model: str = _get("GEMINI_MODEL", "gemini-2.0-flash-001")
-    google_application_credentials: str = _get("GOOGLE_APPLICATION_CREDENTIALS")
+    gemini_api_key: str = _get("GEMINI_API_KEY")
+    gemini_model: str = _get("GEMINI_MODEL", "gemini-2.0-flash")
 
     adzuna_app_id: str = _get("ADZUNA_APP_ID")
     adzuna_app_key: str = _get("ADZUNA_APP_KEY")

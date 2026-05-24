@@ -1,7 +1,7 @@
 # JobHunterX — Architecture Reference
 
 **Status:** Phase 1 + Review Queue complete · Manual outreach via scripts
-**Stack:** Python 3.12 · Playwright · Gemini on Vertex AI (scoring/resume only) · SQLite · Google Sheets
+**Stack:** Python 3.12 · Playwright · Gemini API (scoring/resume only) · SQLite · Google Sheets
 **Mode:** Human-in-the-loop — bot scrapes + ranks, you apply + send outreach
 
 ---
@@ -273,10 +273,9 @@ max_linkedin_people_per_company: int = 3
 ## 6. ENVIRONMENT (`.env`)
 
 ```
-# Vertex AI (used by scripts/generate_resume.py ScreeningQA)
-GOOGLE_CLOUD_PROJECT=...
-GOOGLE_CLOUD_REGION=us-central1
-GEMINI_MODEL=gemini-2.0-flash-001
+# Gemini API (used by scripts/generate_resume.py ScreeningQA)
+GEMINI_API_KEY=...
+GEMINI_MODEL=gemini-2.0-flash
 
 # Optional scrapers
 ADZUNA_APP_ID=
