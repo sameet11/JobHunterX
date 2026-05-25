@@ -194,7 +194,10 @@ def _append_to_sheets(rows: list[tuple[Job, list]]) -> None:
         gs = GoogleSheets()
         gs.init()
     except Exception as exc:
-        logger.warning(f"Google Sheets not available — skipping tracker update: {exc}")
+        logger.opt(exception=exc).warning(
+            f"Google Sheets not available — skipping tracker update "
+            f"[{type(exc).__name__}: {exc!r}]"
+        )
         return
 
     added = 0

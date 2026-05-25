@@ -120,6 +120,8 @@ def filter_and_rank(jobs: list[Job], db: LocalDB) -> tuple[list[ScoredJob], dict
         recency_weight=user_config.job_recency_weight,
         recency_hours_threshold=user_config.job_recency_hours_threshold,
         india_location_boost=user_config.india_location_boost,
+        priority_companies=user_config.priority_companies,
+        priority_company_boost=user_config.priority_company_boost,
     )
 
     fresh: list[Job] = []

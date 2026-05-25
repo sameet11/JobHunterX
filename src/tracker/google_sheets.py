@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -20,7 +21,9 @@ _SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive",
 ]
-_TOKEN_PATH = Path(__file__).resolve().parents[2] / "data" / "google_sheets_token.json"
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_TOKEN_PATH = _REPO_ROOT / "data" / "google_sheets_token.json"
+_CREDENTIALS_PATH = _REPO_ROOT / "credentials.json"
 
 _APPLICATIONS_TAB = "Applications"
 _OUTREACH_TAB = "Outreach"
@@ -40,7 +43,33 @@ class GoogleSheets:
             raise RuntimeError("GOOGLE_SHEET_ID not set in .env")
         creds = self._get_or_create_credentials()
         client = gspread.authorize(creds)
-        self._sheet = client.open_by_key(self.sheet_id)
+        try:
+            self._sheet = client.open_by_key(self.sheet_id)
+        except PermissionError as exc:
+            cause = exc.__cause__
+            msg = str(cause) if cause else ""
+            if "has not been used" in msg or "is disabled" in msg or "SERVICE_DISABLED" in msg:
+                # Extract project id from the API hint URL if present
+                m = re.search(r"project=(\d+)", msg)
+                project_hint = (
+                    f"https://console.developers.google.com/apis/api/sheets.googleapis.com/"
+                    f"overview?project={m.group(1)}"
+                ) if m else "https://console.developers.google.com/apis/library/sheets.googleapis.com"
+                raise RuntimeError(
+                    "Google Sheets API is disabled on the OAuth project tied to your "
+                    f"credentials.json. Enable it once at: {project_hint}\n"
+                    "Wait ~1 min for propagation, then re-run."
+                ) from exc
+            if "drive.googleapis.com" in msg or "Drive API" in msg:
+                raise RuntimeError(
+                    "Google Drive API is disabled on the OAuth project. Enable it at: "
+                    "https://console.developers.google.com/apis/library/drive.googleapis.com"
+                ) from exc
+            hint = msg or (
+                "check that your Google account has access to the spreadsheet "
+                "and that credentials.json scopes are correct."
+            )
+            raise RuntimeError(f"Sheets API permission denied: {hint}") from exc
         self._tab = self._ensure_tab(_APPLICATIONS_TAB, SHEET_COLUMNS)
         self._outreach_tab = self._ensure_tab(_OUTREACH_TAB, OUTREACH_COLUMNS)
         self._connect_queue_tab = self._ensure_tab(_CONNECT_QUEUE_TAB, CONNECT_QUEUE_COLUMNS)
@@ -64,9 +93,14 @@ class GoogleSheets:
                 logger.warning(f"Cached token invalid ({exc}) — re-running OAuth flow")
                 _TOKEN_PATH.unlink(missing_ok=True)
 
+        if not _CREDENTIALS_PATH.exists():
+            raise RuntimeError(
+                f"credentials.json not found at {_CREDENTIALS_PATH} — "
+                "download OAuth client from Google Cloud Console"
+            )
         logger.info("First-time setup: opening browser for Google authorization...")
         flow = InstalledAppFlow.from_client_secrets_file(
-            "credentials.json",
+            str(_CREDENTIALS_PATH),
             scopes=_SCOPES,
         )
         creds = flow.run_local_server(port=0)

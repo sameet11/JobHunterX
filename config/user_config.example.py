@@ -181,9 +181,17 @@ class UserConfig:
     linkedin_jitter_max_seconds: int = 120
 
     # ───── Scoring weights ─────
-    job_recency_weight: float = 0.2           # boost for jobs posted < recency_hours_threshold
-    job_recency_hours_threshold: int = 24
+    job_recency_weight: float = 0.2           # decay'd boost for fresh postings
+    job_recency_hours_threshold: int = 168    # 7 days — beyond this, no recency boost
     india_location_boost: float = 0.45        # India jobs rank above non-India
+    priority_company_boost: float = 0.35      # flat boost for `priority_companies` matches
+
+    # ───── Priority companies (case-insensitive, flexible match) ─────
+    # Anything listed here gets +priority_company_boost on its score.
+    # Seed with the big/famous names you actively want to apply to.
+    priority_companies: tuple[str, ...] = (
+        # Example: "Flipkart", "Razorpay", "Microsoft", "Google", ...
+    )
 
     # ───── Filtering ─────
     skip_companies: tuple[str, ...] = ()      # exact company names to skip

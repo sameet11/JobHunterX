@@ -18,8 +18,11 @@ from urllib.parse import quote_plus
 from src.models import Job, Recruiter
 from src.utils.logger import logger
 
-_PROFILE_DIR = Path(__file__).resolve().parents[2] / "data" / "linkedin_browser_session"
-_RECRUITER_KEYWORDS = ("recruiter", "talent", "hiring", "hr", "people", "sourcer", "acquisition")
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_PROFILE_DIR = _REPO_ROOT / "data" / "linkedin_browser_session"
+_DEBUG_DIR = _REPO_ROOT / "data" / "debug"
+_RECRUITER_KEYWORDS = ("recruiter", "talent", "hiring", "hr", "people", "sourcer", "acquisition", "ta ")
+_NOISE_NAMES = {"linkedin member", "linkedin", ""}
 
 
 def find_linkedin_recruiters(
@@ -122,13 +125,15 @@ def _ensure_logged_in(page) -> None:
 
 
 def _search_company(page, company: str, *, max_results: int) -> list[Recruiter]:
-    """Navigate to LinkedIn people search for `company recruiter` and extract cards.
+    """Navigate to LinkedIn people search and extract profiles at the company.
 
-    Strategy:
-      1. Isolate actual search-result cards (not sidebar / connections of a result)
-      2. Within each card find the primary /in/ link + subtitle text
-      3. Require a recruiter-ish title — never keep empty-title results, which
-         are usually connection suggestions shown below the first result's profile
+    Strategy (resilient to LinkedIn DOM churn):
+      1. Scope to <main> so sidebar suggestions are excluded.
+      2. Collect every unique /in/ profile inside <main>; pull each one's
+         nearest container for name + subtitle extraction.
+      3. Score by recruiter-ish keywords in title — recruiters first, then
+         anyone else at the company. Empty titles are kept but ranked last.
+      4. On 0 results, dump page HTML to data/debug/ for inspection.
     """
     url = (
         "https://www.linkedin.com/search/results/people/"
@@ -145,132 +150,137 @@ def _search_company(page, company: str, *, max_results: int) -> list[Recruiter]:
         logger.warning("LinkedIn requires re-auth — visit linkedin.com and log in, then retry")
         return []
 
-    # Wait for result cards to appear
-    _CARD_SELECTORS = [
-        "li.reusable-search__result-container",
-        "div.reusable-search__result-container",
-        "li[data-view-name='search-entity-result-universal-template']",
-    ]
-    card_selector = None
-    for sel in _CARD_SELECTORS:
-        try:
-            page.wait_for_selector(sel, timeout=12000)
-            card_selector = sel
-            break
-        except Exception:
-            pass
+    # Wait for any profile link to materialize inside main content
+    try:
+        page.wait_for_selector("main a[href*='/in/']", timeout=15000)
+    except Exception:
+        logger.warning(f"No profile links found for {company} (selector timeout)")
+        _dump_debug_html(page, company)
+        return []
 
-    if card_selector is None:
-        # Fall back to waiting for any /in/ link (older LinkedIn layout)
-        try:
-            page.wait_for_selector("a[href*='/in/']", timeout=8000)
-        except Exception:
-            logger.warning(f"No search result cards found for {company}")
-            return []
-
-    # Let lazy-loaded subtitles finish rendering
     try:
         page.wait_for_load_state("networkidle", timeout=8000)
     except Exception:
         pass
     time.sleep(random.uniform(1.5, 3.0))
 
-    # Human-like scroll
+    # Human-like scroll so lazy subtitles render
     try:
-        for _ in range(random.randint(2, 4)):
-            page.mouse.wheel(0, random.randint(200, 500))
+        for _ in range(random.randint(3, 5)):
+            page.mouse.wheel(0, random.randint(300, 700))
             time.sleep(random.uniform(0.4, 1.1))
     except Exception:
         pass
 
-    seen_slugs: set[str] = set()
-    recruiters: list[Recruiter] = []
+    # Pull all candidate people via JS — one round-trip, no per-card RPCs.
+    # For each /in/ link inside <main>, walk up to a sensible container
+    # (li/div with role=listitem or with multiple text rows) and extract
+    # the name and the first non-name visible text line as title.
+    candidates: list[dict] = page.evaluate(
+        """
+        () => {
+            const main = document.querySelector('main') || document.body;
+            const links = Array.from(main.querySelectorAll("a[href*='/in/']"));
+            const out = [];
+            const seen = new Set();
+            for (const a of links) {
+                const href = (a.getAttribute('href') || '').split('?')[0].split('#')[0];
+                const m = href.match(/\\/in\\/([^/]+)\\/?$/);
+                if (!m) continue;
+                const slug = m[1].toLowerCase();
+                if (seen.has(slug)) continue;
 
-    if card_selector:
-        cards = page.query_selector_all(card_selector)
-    else:
-        # No card selector found — scope to the main search results list only,
-        # NOT the full page (avoids picking up sidebar/connection links)
-        cards = page.query_selector_all(
-            "main a[href*='/in/'], "
-            "[data-test-search-result] a[href*='/in/'], "
-            ".search-results-container a[href*='/in/']"
-        )
+                // Walk up to a container that includes more than just the link
+                let container = a;
+                for (let i = 0; i < 6; i++) {
+                    const p = container.parentElement;
+                    if (!p) break;
+                    container = p;
+                    const txt = (container.innerText || '').trim();
+                    if (txt.split('\\n').length >= 2) break;
+                }
 
-    for card in cards:
-        try:
-            # Get the primary profile link within this card
-            link = (
-                card.query_selector("a[href*='/in/']")
-                if card_selector
-                else card  # already a link in fallback path
-            )
-            if link is None:
-                continue
+                // Name candidates: aria-label, link inner text, then container heading
+                let name = (a.getAttribute('aria-label') || '').trim();
+                if (!name || /^(view|see)\\s/i.test(name)) {
+                    name = (a.innerText || '').trim().split('\\n')[0].trim();
+                }
+                if (!name) {
+                    const span = container.querySelector("span[aria-hidden='true']");
+                    if (span) name = (span.innerText || '').trim();
+                }
 
-            href = (link.get_attribute("href") or "").split("?")[0].split("#")[0]
-            slug_m = re.search(r"/in/([^/]+)/?$", href)
-            if not slug_m:
-                continue
-            slug = slug_m.group(1).lower()
-            if slug in seen_slugs:
-                continue
-            seen_slugs.add(slug)
+                // Clean trailing " · 2nd" / "— 3rd+" connection markers
+                name = name.replace(/\\s*[\\u2013\\u2014\\-·]\\s*\\d+(?:st|nd|rd|th)?\\+?\\b.*$/, '').trim();
 
-            profile_url = f"https://www.linkedin.com/in/{slug}"
+                // Title: first visible text row in the container that isn't the name
+                let title = '';
+                const nameLower = name.toLowerCase();
+                const lines = (container.innerText || '')
+                    .split('\\n').map(s => s.trim()).filter(Boolean);
+                for (let ln of lines) {
+                    // Strip trailing connection marker " · 2nd", "— 3rd+", etc.
+                    ln = ln.replace(/\\s*[\\u2013\\u2014\\-·•]\\s*\\d+(?:st|nd|rd|th)?\\+?\\s*.*$/i, '').trim();
+                    if (!ln) continue;
+                    if (nameLower && ln.toLowerCase().startsWith(nameLower)) continue;
+                    if (/^\\d+(st|nd|rd|th)?\\s*\\+?\\s*$/i.test(ln)) continue;
+                    if (/^(connect|message|follow|view profile|status is|\\*\\s)/i.test(ln)) continue;
+                    title = ln;
+                    break;
+                }
 
-            # Name from the card
-            name = (link.get_attribute("aria-label") or "").strip()
-            if not name or name.lower().startswith(("view ", "see ")):
-                txt = (link.inner_text() or "").strip()
-                name = next((ln.strip() for ln in txt.splitlines() if ln.strip()), "")
-            name = re.sub(r"\s*[–—-]\s*\d+(?:st|nd|rd)?\b.*$", "", name).strip()
-            if not name or name.lower() in ("linkedin member", "linkedin"):
-                continue
+                seen.add(slug);
+                out.push({ slug, name, title });
+            }
+            return out;
+        }
+        """
+    )
 
-            # Title: read from the card container's subtitle element
-            title = ""
-            try:
-                container = card if card_selector else link
-                title = container.evaluate(
-                    """el => {
-                        const sels = [
-                            "div.entity-result__primary-subtitle",
-                            "div[class*='primary-subtitle']",
-                            "div[class*='subtitle']",
-                            "div.t-14.t-normal",
-                            "div.t-14:not(.t-bold)"
-                        ];
-                        for (const s of sels) {
-                            const node = el.querySelector(s);
-                            if (node && node.innerText && node.innerText.trim())
-                                return node.innerText.trim();
-                        }
-                        return "";
-                    }"""
-                )
-            except Exception:
-                pass
-
-            # Strictly require a recruiter-ish title — empty title means we
-            # picked up a connection card or sidebar suggestion, skip it
-            if not title or not any(kw in title.lower() for kw in _RECRUITER_KEYWORDS):
-                continue
-
-            recruiters.append(Recruiter(
-                name=name,
-                title=title,
-                email="",
-                company=company,
-                source="linkedin_browser",
-                confidence=85,
-                linkedin_url=profile_url,
-            ))
-            if len(recruiters) >= max_results:
-                break
-        except Exception as exc:
-            logger.debug(f"Failed to parse a result card for {company}: {exc}")
+    cleaned: list[Recruiter] = []
+    for c in candidates:
+        name = (c.get("name") or "").strip()
+        title = (c.get("title") or "").strip()
+        slug = c.get("slug") or ""
+        if not slug or name.lower() in _NOISE_NAMES:
             continue
+        # Drop UI strings that occasionally leak through as names
+        if re.search(r"(open menu|connections|premium|saved searches)", name, re.I):
+            continue
+        cleaned.append(Recruiter(
+            name=name,
+            title=title,
+            email="",
+            company=company,
+            source="linkedin_browser",
+            confidence=80,
+            linkedin_url=f"https://www.linkedin.com/in/{slug}",
+        ))
 
-    logger.info(f"Found {len(recruiters)} recruiter(s) at {company}")
-    return recruiters
+    # Sort: recruiter-ish titles first, then anyone else, empty titles last
+    def _rank(r: Recruiter) -> tuple[int, int]:
+        t = (r.title or "").lower()
+        is_recruiter = any(kw in t for kw in _RECRUITER_KEYWORDS)
+        has_title = bool(t)
+        return (0 if is_recruiter else (1 if has_title else 2), 0)
+
+    cleaned.sort(key=_rank)
+    result = cleaned[:max_results]
+
+    if not result:
+        _dump_debug_html(page, company)
+        logger.warning(f"0 recruiters parsed for {company} — HTML dumped to {_DEBUG_DIR}")
+    else:
+        logger.info(f"Found {len(result)} person(s) at {company} (from {len(cleaned)} candidates)")
+    return result
+
+
+def _dump_debug_html(page, company: str) -> None:
+    try:
+        _DEBUG_DIR.mkdir(parents=True, exist_ok=True)
+        safe = re.sub(r"[^\w\-]+", "_", company)[:40]
+        path = _DEBUG_DIR / f"linkedin_search_{safe}.html"
+        path.write_text(page.content(), encoding="utf-8")
+        logger.warning(f"Saved page HTML for inspection: {path}")
+    except Exception as exc:
+        logger.debug(f"Could not dump debug HTML: {exc}")
