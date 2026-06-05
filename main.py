@@ -113,6 +113,13 @@ def _salary_below_min(salary_str: str | None, min_salary: int) -> bool:
     return int(max_val) < min_salary
 
 
+def _compile_title_exclusions() -> list[re.Pattern[str]]:
+    return [re.compile(p, re.IGNORECASE) for p in user_config.skip_title_patterns]
+
+
+_TITLE_EXCLUSIONS = _compile_title_exclusions()
+
+
 def filter_and_rank(jobs: list[Job], db: LocalDB) -> tuple[list[ScoredJob], dict[str, int]]:
     skip_companies = {c.lower() for c in user_config.skip_companies}
     scorer = MatchScorer(
@@ -126,12 +133,16 @@ def filter_and_rank(jobs: list[Job], db: LocalDB) -> tuple[list[ScoredJob], dict
 
     fresh: list[Job] = []
     scores: dict[str, int] = {}
-    stats = {"skipped_company": 0, "already_seen": 0, "applied_recently": 0, "low_salary": 0, "low_score": 0, "passed": 0}
+    stats = {"skipped_company": 0, "skipped_title": 0, "already_seen": 0, "applied_recently": 0, "low_salary": 0, "low_score": 0, "passed": 0}
     score_samples: list[tuple[int, str, str]] = []
 
     for job in jobs:
         if job.company.lower() in skip_companies:
             stats["skipped_company"] += 1
+            continue
+        if any(rx.search(job.title) for rx in _TITLE_EXCLUSIONS):
+            stats["skipped_title"] += 1
+            logger.debug(f"Filtered (title too senior): {job.company} — {job.title}")
             continue
         if db.already_seen(job):
             stats["already_seen"] += 1
@@ -154,6 +165,7 @@ def filter_and_rank(jobs: list[Job], db: LocalDB) -> tuple[list[ScoredJob], dict
 
     logger.info(
         f"Filter breakdown — skip_company: {stats['skipped_company']} | "
+        f"skip_title: {stats['skipped_title']} | "
         f"already_seen: {stats['already_seen']} | "
         f"applied_recently: {stats['applied_recently']} | "
         f"low_salary: {stats['low_salary']} | "
